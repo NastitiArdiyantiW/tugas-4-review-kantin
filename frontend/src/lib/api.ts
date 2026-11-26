@@ -1,6 +1,5 @@
 import type {
   ApiResponse,
-  AuditLog,
   CreateOwnerInput,
   Flag,
   FlagInput,
@@ -22,6 +21,41 @@ import type {
   UserRole,
 } from '../types/api.ts';
 import { clearToken, http, setToken } from './http.ts';
+
+export interface AuditLogItem {
+  id: number;
+  userId: number;
+  userName: string | null;
+  userEmail: string | null;
+  action: string;
+  targetTable: string;
+  targetId: number;
+  metadata: Record<string, unknown> | null;
+  createdAt: string | null;
+}
+
+export interface AuditLogPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLogItem[];
+  pagination: AuditLogPagination;
+}
+
+export interface AuditLogQuery {
+  page?: number;
+  pageSize?: number;
+  action?: string;
+  targetTable?: string;
+  targetId?: number;
+  userId?: number;
+  from?: string;
+  to?: string;
+}
 
 const data = <T>(response: { data: ApiResponse<T> }): T => response.data.data;
 
@@ -46,9 +80,14 @@ export const authApi = {
       .get<ApiResponse<{ user: User }>>('/auth/me')
       .then((res) => res.data.data.user),
 
-  // Backend tidak punya endpoint logout, jadi cukup hapus token di browser
   logout: async () => {
-    clearToken();
+    try {
+      await http.post('/auth/logout');
+    } catch {
+      // Best-effort: tetap logout di browser walau request gagal
+    } finally {
+      clearToken();
+    }
   },
 };
 
@@ -115,6 +154,8 @@ export const flagsApi = {
 };
 
 export const auditApi = {
-  list: (params?: { action?: string; targetTable?: string }) =>
-    http.get<ApiResponse<AuditLog[]>>('/audit-logs', { params }).then(data),
+  list: (params?: AuditLogQuery) =>
+    http.get<ApiResponse<AuditLogListResponse>>('/audit-logs', { params }).then(data),
+  getById: (id: number) =>
+    http.get<ApiResponse<AuditLogItem>>(`/audit-logs/${id}`).then(data),
 };
